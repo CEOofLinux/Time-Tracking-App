@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission Control 2.1: Timed Operations</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom Styles */
+        :root {
+            --primary-glow: rgba(0, 225, 255, 0.7);
+            --secondary-glow: rgba(58, 175, 169, 0.8);
+            --danger-glow: rgba(255, 70, 70, 0.7);
+            --warning-glow: rgba(255, 215, 0, 0.8);
+            --dark-bg: #0d1117;
+            --card-bg: rgba(22, 27, 34, 0.6);
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--dark-bg);
+            color: #e0e0e0;
+            overflow-x: hidden;
+            background-image:
+                radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
+                radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px);
+            background-size: 550px 550px, 350px 350px;
+            background-position: 0 0, 40px 60px;
+            animation: move-stars 200s linear infinite;
+        }
+        
+        @keyframes move-stars {
+            from {background-position: 0 0, 40px 60px;}
+            to {background-position: -10000px 5000px, -10000px 5000px;}
+        }
+
+        .font-orbitron { font-family: 'Orbitron', sans-serif; }
+
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .neon-text {
+            font-weight: 900;
+            text-shadow: 0 0 5px var(--primary-glow), 0 0 10px var(--primary-glow), 0 0 20px var(--primary-glow), 0 0 40px #0096C7;
+        }
+
+        .xp-bar {
+            background: linear-gradient(90deg, #3a7bd5, var(--secondary-glow));
+            transition: width 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+            box-shadow: 0 0 10px var(--secondary-glow), 0 0 20px var(--secondary-glow);
+        }
+        
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .task-item {
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            animation: fadeInDown 0.5s ease-out forwards;
+        }
+
+        .task-item.completing {
+            transform: scale(0); opacity: 0; height: 0; margin: 0; padding: 0; border: 0;
+        }
+
+        .task-checkbox {
+            appearance: none; width: 24px; height: 24px;
+            border: 2px solid var(--secondary-glow); border-radius: 50%;
+            cursor: pointer; position: relative; transition: all 0.2s ease;
+        }
+        .task-checkbox:hover { box-shadow: 0 0 15px var(--secondary-glow); }
+        .task-checkbox:checked {
+            background-color: var(--secondary-glow); border-color: var(--secondary-glow);
+            box-shadow: 0 0 15px var(--secondary-glow);
+        }
+        .task-checkbox:checked::after {
+            content: '\u2713'; font-size: 16px; color: var(--dark-bg); font-weight: bold;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600;
+            transition: all 0.2s ease; cursor: pointer; border: 1px solid transparent;
+        }
+        .btn-primary { background: linear-gradient(45deg, #3a7bd5, #3aafa9); color: white; }
+        .btn-primary:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 10px 20px rgba(58, 175, 169, 0.4); }
+        .btn-danger { background-color: rgba(255, 70, 70, 0.2); color: #ff8a8a; border-color: var(--danger-glow); }
+        .btn-danger:hover { background-color: rgba(255, 70, 70, 0.4); box-shadow: 0 0 15px var(--danger-glow); transform: translateY(-2px); }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed; inset: 0; background-color: rgba(10, 10, 20, 0.8);
+            backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center;
+            z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s ease;
+        }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-container { transform: scale(0.9); transition: transform 0.3s ease; }
+        .modal-overlay.active .modal-container { transform: scale(1); }
+        .modal-overlay.server-warning { z-index: 10000; }
+        
+        /* Spinner */
+        #loading-overlay { z-index: 9999; }
+        .spinner { border: 4px solid rgba(255, 255, 255, 0.2); width: 36px; height: 36px; border-radius: 50%; border-left-color: var(--secondary-glow); animation: spin 1s ease infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Icon Button Styles */
+        .icon-btn { background: transparent; border: none; padding: 0.5rem; border-radius: 50%; cursor: pointer; transition: background-color 0.2s, transform 0.2s; }
+        .icon-btn svg { width: 20px; height: 20px; }
+        .icon-btn.reactivate:hover { background-color: rgba(0, 225, 255, 0.2); transform: scale(1.1); }
+        .icon-btn.delete:hover { background-color: rgba(255, 70, 70, 0.2); transform: scale(1.1); }
+        
+        /* Timer Styles */
+        .timer-display { font-family: 'Orbitron', sans-serif; font-size: 1.75rem; transition: color 0.3s, text-shadow 0.3s; }
+        .timer-display.running { color: var(--primary-glow); text-shadow: 0 0 8px var(--primary-glow); }
+        .timer-display.low { color: var(--warning-glow); text-shadow: 0 0 8px var(--warning-glow); }
+        .timer-display.critical { color: var(--danger-glow); text-shadow: 0 0 8px var(--danger-glow); animation: pulse-red 1s infinite; }
+        .timer-display.failed { color: #aaa; text-shadow: none; animation: none; }
+        .task-item.timer-running { box-shadow: 0 0 15px var(--primary-glow); border-color: var(--primary-glow); animation: pulse-blue 2s infinite; }
+
+        @keyframes pulse-red { 50% { text-shadow: 0 0 15px var(--danger-glow); } }
+        @keyframes pulse-blue { 50% { box-shadow: 0 0 25px var(--primary-glow); } }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+
+    <div id="loading-overlay" class="fixed inset-0 bg-black/90 flex flex-col justify-center items-center gap-4">
+        <div class="spinner"></div>
+        <p class="font-orbitron text-lg text-gray-300">Synchronizing with Mainframe...</p>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-2xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="font-orbitron text-4xl sm:text-5xl md:text-6xl font-bold neon-text">MISSION CONTROL</h1>
+        </header>
+
+        <main>
+            <section id="status-card" class="glass-card p-4 sm:p-6 mb-8">
+                <!-- Agent Status -->
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h2 class="font-orbitron text-xl">Agent Status</h2>
+                        <p id="user-level" class="text-lg font-semibold text-cyan-300">Level 1 - Rookie</p>
+                    </div>
+                    <div class="text-right">
+                         <p class="text-sm text-gray-400">Agent ID:</p>
+                         <p id="user-id-display" class="text-xs text-gray-500 break-all"></p>
+                    </div>
+                </div>
+                <!-- XP Bar -->
+                <div>
+                    <div class="flex justify-between items-center text-sm mb-1 font-semibold">
+                        <span class="text-gray-300">XP</span>
+                        <span id="xp-counter" class="font-bold text-lg">0 / 100</span>
+                    </div>
+                    <div class="xp-bar-container w-full h-4 rounded-full overflow-hidden border border-gray-700 shadow-inner">
+                        <div id="xp-bar" class="h-full rounded-full" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="glass-card p-4 sm:p-6 mb-8">
+                 <h3 class="font-orbitron text-lg mb-4">New Mission Briefing</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                    <input type="text" id="task-input" class="sm:col-span-8 w-full bg-transparent border-2 border-gray-600 focus:border-cyan-400 rounded-lg px-4 py-2 text-white outline-none transition" placeholder="Enter new mission objective...">
+                    <input type="number" id="time-input" class="sm:col-span-2 w-full bg-transparent border-2 border-gray-600 focus:border-cyan-400 rounded-lg px-4 py-2 text-white outline-none" placeholder="Mins">
+                    <button id="add-task-btn" class="sm:col-span-2 btn btn-primary font-orbitron w-full">
+                        Launch
+                    </button>
+                </div>
+            </section>
+
+            <section class="mb-12">
+                <h2 class="font-orbitron text-2xl mb-4">Active Missions</h2>
+                <div id="task-list" class="space-y-4"></div>
+            </section>
+
+            <section>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="font-orbitron text-2xl">Mission Debriefing</h2>
+                    <button id="clear-log-btn" class="btn btn-danger text-sm">Clear Log</button>
+                </div>
+                <div id="completed-task-list" class="space-y-3"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals (Confirmation, Level Up) -->
+    <div id="confirmation-modal" class="modal-overlay">
+        <div class="modal-container glass-card w-11/12 max-w-md p-6 text-center">
+            <h3 id="modal-title" class="text-xl font-orbitron mb-4">Confirm Action</h3>
+            <p id="modal-text" class="text-gray-300 mb-6">Are you sure?</p>
+            <div class="flex justify-center gap-4">
+                <button id="modal-cancel-btn" class="btn bg-gray-600 hover:bg-gray-500 text-white w-28">Cancel</button>
+                <button id="modal-confirm-btn" class="btn btn-danger w-28">Confirm</button>
+            </div>
+        </div>
+    </div>
+    <div id="level-up-modal" class="modal-overlay">
+        <div class="modal-container glass-card w-11/12 max-w-md p-8 text-center" style="border-color: var(--secondary-glow); box-shadow: 0 0 30px var(--secondary-glow);">
+            <div class="font-orbitron text-3xl font-bold text-yellow-300" style="text-shadow: 0 0 15px #facc15;">PROMOTION!</div>
+            <p class="my-4 text-gray-200">Congratulations, Agent! You have been promoted to:</p>
+            <h3 id="level-up-rank" class="text-4xl font-orbitron font-bold my-6 neon-text">Field Operative</h3>
+            <button id="level-up-close-btn" class="btn bg-cyan-500 hover:bg-cyan-400 text-black w-3/4 mx-auto">Continue</button>
+        </div>
+    </div>
+    <div id="server-modal" class="modal-overlay server-warning">
+        <div class="modal-container glass-card w-11/12 max-w-md p-6 text-center">
+            <h3 id="server-modal-title" class="text-xl font-orbitron mb-4">Local Server Required</h3>
+            <p id="server-modal-text" class="text-gray-300 mb-6">To enable offline functionality, this app needs to be run from a local server. Please follow the instructions to set one up.</p>
+            <div class="flex justify-center gap-4">
+                <button id="server-modal-close-btn" class="btn bg-gray-600 hover:bg-gray-500 text-white w-28">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, writeBatch, serverTimestamp, enableMultiTabIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIG & INITIALIZATION ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-mission-app';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        // --- OFFLINE PERSISTENCE ---
+        enableMultiTabIndexedDbPersistence(db)
+            .then(() => {
+                console.log("Firebase offline persistence enabled with multi-tab support");
+            })
+            .catch((err) => {
+                if (err.code == 'failed-precondition') {
+                    console.warn("Firebase persistence failed, likely due to multiple tabs.");
+                } else if (err.code == 'unimplemented') {
+                    console.warn("Firebase persistence is not available in this browser.");
+                }
+            });
+
+
+        // --- UI ELEMENTS ---
+        const ui = {
+            taskInput: document.getElementById('task-input'),
+            timeInput: document.getElementById('time-input'),
+            addTaskBtn: document.getElementById('add-task-btn'),
+            taskList: document.getElementById('task-list'),
+            completedTaskList: document.getElementById('completed-task-list'),
+            clearLogBtn: document.getElementById('clear-log-btn'),
+            xpCounter: document.getElementById('xp-counter'),
+            xpBar: document.getElementById('xp-bar'),
+            userLevelDisplay: document.getElementById('user-level'),
+            loadingOverlay: document.getElementById('loading-overlay'),
+            userIdDisplay: document.getElementById('user-id-display'),
+            confirmationModal: document.getElementById('confirmation-modal'),
+            modalTitle: document.getElementById('modal-title'),
+            modalText: document.getElementById('modal-text'),
+            modalConfirmBtn: document.getElementById('modal-confirm-btn'),
+            modalCancelBtn: document.getElementById('modal-cancel-btn'),
+            levelUpModal: document.getElementById('level-up-modal'),
+            levelUpRank: document.getElementById('level-up-rank'),
+            levelUpCloseBtn: document.getElementById('level-up-close-btn'),
+            serverModal: document.getElementById('server-modal'),
+            serverModalCloseBtn: document.getElementById('server-modal-close-btn'),
+        };
+
+        // --- GAME STATE & CONSTANTS ---
+        let state = {
+            userId: null,
+            userLevel: 1,
+            userXp: 0,
+            allTasks: [],
+            isUpdatingXp: false,
+        };
+        const XP_PER_TASK = 35;
+        const LEVELS = [
+            { name: "Rookie", xpThreshold: 0 }, { name: "Agent", xpThreshold: 100 },
+            { name: "Field Operative", xpThreshold: 250 }, { name: "Specialist", xpThreshold: 500 },
+            { name: "Commander", xpThreshold: 1000 }, { name: "Director", xpThreshold: 2000 },
+            { name: "Overseer", xpThreshold: 5000}
+        ];
+
+        // --- AUTHENTICATION ---
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // Hide loading screen as soon as auth is confirmed
+                ui.loadingOverlay.style.display = 'none';
+
+                state.userId = user.uid;
+                ui.userIdDisplay.textContent = state.userId;
+                
+                try {
+                    await loadUserData();
+                    setupTaskListener();
+                } catch (error) {
+                    console.error("Failed to load user data or set up tasks:", error);
+                }
+            } else {
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Error signing in:", error);
+                    // If sign-in fails, hide the loading screen to prevent getting stuck
+                    ui.loadingOverlay.style.display = 'none';
+                    if (window.location.protocol !== 'file:') {
+                        alert("Authentication Failed. Please check your connection and refresh.");
+                    }
+                }
+            }
+        });
+        
+        // --- DATA HANDLING ---
+        async function loadUserData() {
+            if (!state.userId) return;
+            const userDocRef = doc(db, `artifacts/${appId}/users/${state.userId}`);
+            const userDocSnap = await getDoc(userDocRef);
+            if (userDocSnap.exists()) {
+                const data = userDocSnap.data();
+                state.userXp = data.xp || 0;
+            } else {
+                await setDoc(userDocRef, { xp: 0, createdAt: serverTimestamp() });
+                state.userXp = 0;
+            }
+            updateUI();
+        }
+
+        function setupTaskListener() {
+            if (!state.userId) return;
+            const tasksCollectionRef = collection(db, `artifacts/${appId}/users/${state.userId}/tasks`);
+            onSnapshot(query(tasksCollectionRef), (snapshot) => {
+                const newTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                const addedTasks = newTasks.filter(nt => !state.allTasks.some(ot => ot.id === nt.id));
+                state.allTasks = newTasks;
+                renderAllTasks(addedTasks.map(t=>t.id));
+            }, (error) => console.error("Error fetching tasks:", error));
+        }
+
+        // --- Main Timer Loop ---
+        setInterval(updateAllTimers, 1000);
+
+        function formatTime(totalSeconds) {
+            if (totalSeconds < 0) totalSeconds = 0;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function updateAllTimers() {
+            if (!state.allTasks) return;
+            const now = new Date();
+            state.allTasks.forEach(task => {
+                if (task.timerState === 'running' && task.timerStartTime) {
+                    const taskElement = document.querySelector(`.task-item[data-id="${task.id}"]`);
+                    if (!taskElement) return;
+
+                    const startTime = task.timerStartTime.toDate();
+                    const elapsed = Math.floor((now - startTime) / 1000);
+                    const remaining = task.durationSeconds - elapsed;
+
+                    const timerDisplay = taskElement.querySelector('.timer-display');
+                    if (timerDisplay) {
+                        timerDisplay.textContent = formatTime(remaining);
+                        // Update color based on time remaining
+                        timerDisplay.classList.remove('running', 'low', 'critical', 'failed');
+                        if (remaining <= 0) {
+                            timerDisplay.classList.add('failed');
+                            if (task.status !== 'failed') {
+                                handleTimerExpiration(task.id);
+                            }
+                        } else if (remaining < 60) {
+                            timerDisplay.classList.add('critical');
+                        } else if (remaining < 300) {
+                            timerDisplay.classList.add('low');
+                        } else {
+                            timerDisplay.classList.add('running');
+                        }
+                    }
+                }
+            });
+        }
+        
+        // --- RENDERING & UI LOGIC ---
+        function renderAllTasks(newlyAddedIds = []) {
+            const activeTasks = state.allTasks.filter(t => !t.completed).sort((a, b) => (a.createdAt?.toDate() || 0) - (b.createdAt?.toDate() || 0));
+            const completedTasks = state.allTasks.filter(t => t.completed).sort((a, b) => (b.completedAt?.toDate() || 0) - (a.completedAt?.toDate() || 0));
+            
+            ui.taskList.innerHTML = '';
+            if (activeTasks.length === 0) {
+                 ui.taskList.innerHTML = `<div class="text-center text-gray-500 p-8 glass-card"><p class="font-orbitron text-lg">No active missions.</p><p>Assign a new objective to get started.</p></div>`;
+            } else {
+                activeTasks.forEach(task => ui.taskList.appendChild(createActiveTaskElement(task, newlyAddedIds.includes(task.id))));
+            }
+
+            ui.completedTaskList.innerHTML = '';
+            if (completedTasks.length === 0) {
+                ui.completedTaskList.innerHTML = `<div class="text-center text-gray-500 p-4 rounded-lg"><p>No missions debriefed yet.</p></div>`;
+            } else {
+                completedTasks.forEach(task => ui.completedTaskList.appendChild(createCompletedTaskElement(task)));
+            }
+        }
+
+        function createActiveTaskElement(task, isNew) {
+            const div = document.createElement('div');
+            div.className = 'task-item glass-card p-4';
+            if (!isNew) div.style.animation = 'none';
+            if (task.timerState === 'running') div.classList.add('timer-running');
+            div.dataset.id = task.id;
+
+            const topRow = document.createElement('div');
+            topRow.className = 'flex items-center justify-between gap-4';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'task-checkbox flex-shrink-0';
+            checkbox.addEventListener('change', () => completeTask(task.id, div));
+            if (task.status === 'failed') checkbox.disabled = true;
+
+            const text = document.createElement('span');
+            text.textContent = task.text;
+            text.className = 'flex-grow text-gray-200';
+            if(task.status === 'failed') text.classList.add('line-through', 'text-gray-500');
+
+            topRow.appendChild(checkbox);
+            topRow.appendChild(text);
+
+            div.appendChild(topRow);
+
+            if (task.durationSeconds) {
+                const bottomRow = document.createElement('div');
+                bottomRow.className = 'flex items-center justify-between gap-4 mt-4 pt-4 border-t border-gray-700';
+
+                const timerDisplay = document.createElement('div');
+                timerDisplay.className = 'timer-display';
+                timerDisplay.textContent = formatTime(task.durationSeconds);
+
+                const timerBtn = document.createElement('button');
+                timerBtn.className = 'btn btn-primary text-sm w-28';
+                
+                if (task.status === 'failed') {
+                    timerDisplay.textContent = "FAILED";
+                    timerDisplay.classList.add('failed');
+                    timerBtn.textContent = 'Retry';
+                    timerBtn.classList.remove('btn-primary');
+                    timerBtn.classList.add('btn-danger');
+                    timerBtn.onclick = () => resetTimer(task.id);
+                } else if (task.timerState === 'idle') {
+                    timerBtn.textContent = 'Start';
+                    timerBtn.onclick = () => startTimer(task.id);
+                } else if (task.timerState === 'running') {
+                    timerBtn.textContent = 'Pause';
+                    timerBtn.onclick = () => pauseTimer(task.id);
+                    // Initial calculation for running timers on render
+                    if(task.timerStartTime) {
+                         const elapsed = Math.floor((new Date() - task.timerStartTime.toDate()) / 1000);
+                         timerDisplay.textContent = formatTime(task.durationSeconds - elapsed);
+                    }
+                } else if (task.timerState === 'paused') {
+                    timerBtn.textContent = 'Resume';
+                    timerDisplay.textContent = formatTime(task.timeRemainingOnPause);
+                    timerBtn.onclick = () => resumeTimer(task.id);
+                }
+                
+                bottomRow.appendChild(timerDisplay);
+                bottomRow.appendChild(timerBtn);
+                div.appendChild(bottomRow);
+            }
+            return div;
+        }
+        
+        function createCompletedTaskElement(task) {
+            const div = document.createElement('div');
+            div.className = 'glass-card p-3 flex items-center justify-between gap-4 opacity-70';
+            div.dataset.id = task.id;
+            div.style.animation = 'none';
+
+            const text = document.createElement('span');
+            text.textContent = task.text;
+            text.className = 'flex-grow text-gray-400 line-through';
+
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'flex items-center gap-2 flex-shrink-0';
+            
+            const reactivateBtn = document.createElement('button');
+            reactivateBtn.className = 'icon-btn reactivate';
+            reactivateBtn.title = "Re-activate Mission";
+            reactivateBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="text-cyan-300"><path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-4.518a.75.75 0 00-.75.75v4.518l1.903-1.903a.75.75 0 00-1.06-1.06l-1.903 1.903a7.5 7.5 0 01-1.282 8.354l-1.06.918a.75.75 0 001.06 1.061l1.06-.918a6 6 0 008.536-4.64l-1.902-1.903a.75.75 0 00-1.06-1.06l1.902 1.903a4.5 4.5 0 01-6.364 3.364l-1.903-1.903a.75.75 0 00-1.06 1.06l1.903 1.903a6 6 0 004.471 2.023v1.5a.75.75 0 001.5 0v-1.5a6 6 0 001.06-11.642A6 6 0 004.755 10.059z" clip-rule="evenodd" /></svg>`;
+            reactivateBtn.onclick = () => reactivateTask(task.id);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'icon-btn delete';
+            deleteBtn.title = "Delete Permanently";
+            deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="text-red-400"><path fill-rule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.006a.75.75 0 01-.749.665H5.232a.75.75 0 01-.749-.665L3.477 6.662l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.9h1.368c1.603 0 2.816 1.336 2.816 2.9zM12 3.25a.75.75 0 01.75.75v.008l.008.008.008.008.008.008.008.008.008.008.008.008.008.008.008.008.008.008.008.008.007.008h-.015a.75.75 0 01-.75-.75V3.25z" clip-rule="evenodd" /></svg>`;
+            deleteBtn.onclick = () => confirmDelete(task.id);
+            
+            buttonContainer.appendChild(reactivateBtn);
+            buttonContainer.appendChild(deleteBtn);
+
+            div.appendChild(text);
+            div.appendChild(buttonContainer);
+            return div;
+        }
+
+        function getLevelInfo(xp) {
+            let levelInfo = { level: 1, ...LEVELS[0] };
+            for (let i = LEVELS.length - 1; i >= 0; i--) {
+                if (xp >= LEVELS[i].xpThreshold) {
+                    levelInfo = { level: i + 1, ...LEVELS[i] };
+                    break;
+                }
+            }
+            return levelInfo;
+        }
+        
+        function updateUI(previousXp = -1) {
+            const oldLevelInfo = getLevelInfo(previousXp >= 0 ? previousXp : state.userXp);
+            const newLevelInfo = getLevelInfo(state.userXp);
+
+            // Check for level up
+            if (newLevelInfo.level > oldLevelInfo.level && previousXp >= 0) {
+                showLevelUpModal(newLevelInfo.name);
+            }
+            
+            state.userLevel = newLevelInfo.level;
+            const currentLevelXpStart = newLevelInfo.xpThreshold;
+            const nextLevelInfo = LEVELS[state.userLevel] || { xpThreshold: currentLevelXpStart + 100 };
+            const xpForNextLevel = nextLevelInfo.xpThreshold - currentLevelXpStart;
+            const xpInCurrentLevel = state.userXp - currentLevelXpStart;
+            const xpPercentage = xpForNextLevel > 0 ? (xpInCurrentLevel / xpForNextLevel) * 100 : 100;
+            
+            ui.userLevelDisplay.textContent = `Level ${newLevelInfo.level} - ${newLevelInfo.name}`;
+            ui.xpBar.style.width = `${xpPercentage}%`;
+            ui.xpCounter.textContent = `${xpInCurrentLevel.toLocaleString()} / ${xpForNextLevel.toLocaleString()}`;
+        }
+
+        // --- SOUNDS ---
+        function playSound(type) {
+             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+             if (audioContext.state === 'suspended') { audioContext.resume(); }
+             const oscillator = audioContext.createOscillator();
+             const gainNode = audioContext.createGain();
+             oscillator.connect(gainNode);
+             gainNode.connect(audioContext.destination);
+             gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+
+            if (type === 'complete') {
+                 const messages = ["Mission accomplished.", "Objective complete.", "Great work, agent."];
+                 const utterance = new SpeechSynthesisUtterance(messages[Math.floor(Math.random() * messages.length)]);
+                 utterance.lang = 'en-US'; utterance.rate = 0.9; utterance.pitch = 0.8;
+                 window.speechSynthesis.speak(utterance);
+            } else if (type === 'levelUp') {
+                const utterance = new SpeechSynthesisUtterance("Promotion granted.");
+                window.speechSynthesis.speak(utterance);
+            }
+             oscillator.start(audioContext.currentTime);
+             oscillator.stop(audioContext.currentTime + 1);
+        }
+
+        // --- TIMER ACTIONS ---
+        async function startTimer(taskId) {
+            const taskRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+            await updateDoc(taskRef, {
+                timerState: 'running',
+                timerStartTime: serverTimestamp()
+            });
+        }
+        
+        async function pauseTimer(taskId) {
+            const task = state.allTasks.find(t => t.id === taskId);
+            if (!task || !task.timerStartTime) return;
+            const elapsed = Math.floor((new Date() - task.timerStartTime.toDate()) / 1000);
+            const timeRemainingOnPause = task.durationSeconds - elapsed;
+
+            const taskRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+            await updateDoc(taskRef, {
+                timerState: 'paused',
+                timeRemainingOnPause: timeRemainingOnPause > 0 ? timeRemainingOnPause : 0
+            });
+        }
+
+        async function resumeTimer(taskId) {
+            const task = state.allTasks.find(t => t.id === taskId);
+            if (!task || typeof task.timeRemainingOnPause !== 'number') return;
+            
+            const newStartTime = new Date(Date.now() - ((task.durationSeconds - task.timeRemainingOnPause) * 1000));
+
+            const taskRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+            await updateDoc(taskRef, {
+                timerState: 'running',
+                timerStartTime: newStartTime
+            });
+        }
+        
+        async function resetTimer(taskId) {
+            const taskRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+            await updateDoc(taskRef, {
+                timerState: 'idle',
+                timerStartTime: null,
+                timeRemainingOnPause: null,
+                status: 'active'
+            });
+        }
+
+        async function handleTimerExpiration(taskId) {
+            const taskRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+            await updateDoc(taskRef, {
+                timerState: 'idle',
+                status: 'failed'
+            });
+        }
+
+        // --- CORE EVENT HANDLERS ---
+        async function handleAddTask() {
+            const taskText = ui.taskInput.value.trim();
+            const timeLimit = parseInt(ui.timeInput.value, 10);
+
+            if (taskText === '' || !state.userId) return;
+
+            const newTask = {
+                text: taskText,
+                completed: false,
+                createdAt: serverTimestamp(),
+                status: 'active' // active, failed
+            };
+
+            if (!isNaN(timeLimit) && timeLimit > 0) {
+                newTask.durationSeconds = timeLimit * 60;
+                newTask.timerState = 'idle'; // idle, running, paused
+                newTask.timerStartTime = null;
+                newTask.timeRemainingOnPause = null;
+            }
+
+            try {
+                const tasksCollectionRef = collection(db, `artifacts/${appId}/users/${state.userId}/tasks`);
+                await addDoc(tasksCollectionRef, newTask);
+                ui.taskInput.value = '';
+                ui.timeInput.value = '';
+            } catch (error) {
+                console.error("Error adding mission: ", error);
+            }
+        }
+        
+        async function completeTask(taskId, element) {
+            element.classList.remove('timer-running');
+            element.classList.add('completing');
+            playSound('complete');
+            setTimeout(async () => {
+                if (!state.userId) return;
+                const previousXp = state.userXp;
+                const newXp = state.userXp + XP_PER_TASK;
+                const userDocRef = doc(db, `artifacts/${appId}/users/${state.userId}`);
+                const taskDocRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+                try {
+                    const batch = writeBatch(db);
+                    batch.update(userDocRef, { xp: newXp });
+                    batch.update(taskDocRef, { completed: true, completedAt: serverTimestamp() });
+                    await batch.commit();
+                    state.userXp = newXp;
+                    updateUI(previousXp);
+                } catch (error) {
+                    console.error("Error completing task: ", error);
+                    element.classList.remove('completing');
+                }
+            }, 400);
+        }
+
+        async function reactivateTask(taskId) {
+             if (!state.userId) return;
+             const previousXp = state.userXp;
+             const newXp = Math.max(0, state.userXp - XP_PER_TASK);
+             const userDocRef = doc(db, `artifacts/${appId}/users/${state.userId}`);
+             const taskDocRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+             try {
+                const batch = writeBatch(db);
+                batch.update(userDocRef, { xp: newXp });
+                batch.update(taskDocRef, {
+                     completed: false,
+                     completedAt: null,
+                     status: 'active',
+                     timerState: 'idle',
+                     timerStartTime: null,
+                     timeRemainingOnPause: null
+                });
+                await batch.commit();
+                state.userXp = newXp;
+                updateUI(previousXp);
+             } catch (error) {
+                 console.error("Error re-activating task:", error);
+             }
+        }
+        
+        async function deleteTask(taskId) {
+            if (!state.userId) return;
+            try {
+                const taskDocRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks/${taskId}`);
+                await deleteDoc(taskDocRef);
+            } catch (error) {
+                console.error("Error deleting task:", error);
+            }
+        }
+
+        async function handleClearLog() {
+            if (!state.userId) return;
+            const completedTasks = state.allTasks.filter(t => t.completed);
+            if (completedTasks.length === 0) return;
+
+            const batch = writeBatch(db);
+            completedTasks.forEach(task => {
+                const taskDocRef = doc(db, `artifacts/${appId}/users/${state.userId}/tasks`, task.id);
+                batch.delete(taskDocRef);
+            });
+
+            try { await batch.commit(); } 
+            catch (error) { console.error("Error clearing mission log: ", error); }
+        }
+
+        // --- MODAL CONTROLLERS ---
+        function showConfirmationModal(title, text, onConfirm) {
+            ui.modalTitle.textContent = title;
+            ui.modalText.textContent = text;
+            ui.confirmationModal.classList.add('active');
+
+            const confirmListener = () => {
+                onConfirm();
+                closeModal();
+            };
+
+            const cancelListener = () => {
+                closeModal();
+            };
+
+            const closeModal = () => {
+                ui.confirmationModal.classList.remove('active');
+                ui.modalConfirmBtn.removeEventListener('click', confirmListener);
+                ui.modalCancelBtn.removeEventListener('click', cancelListener);
+            };
+            
+            ui.modalConfirmBtn.addEventListener('click', confirmListener);
+            ui.modalCancelBtn.addEventListener('click', cancelListener);
+        }
+        
+        function confirmDelete(taskId) {
+            showConfirmationModal('Confirm Deletion', 'This will permanently delete the mission from the log. Are you sure?', () => deleteTask(taskId));
+        }
+
+        function confirmClearLog() {
+             showConfirmationModal('Confirm Clear Log', 'This will permanently delete ALL completed missions. This action cannot be undone.', handleClearLog);
+        }
+
+        function showLevelUpModal(newRank) {
+            playSound('levelUp');
+            ui.levelUpRank.textContent = newRank;
+            ui.levelUpModal.classList.add('active');
+        }
+
+        // --- EVENT LISTENERS ---
+        ui.addTaskBtn.addEventListener('click', handleAddTask);
+        ui.taskInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleAddTask(); });
+        ui.clearLogBtn.addEventListener('click', confirmClearLog);
+        ui.levelUpCloseBtn.addEventListener('click', () => ui.levelUpModal.classList.remove('active'));
+        ui.serverModalCloseBtn.addEventListener('click', () => ui.serverModal.classList.remove('active'));
+
+
+        // --- SERVICE WORKER FOR OFFLINE CAPABILITY ---
+        if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+            const swCode = `
+                const CACHE_NAME = 'mission-control-cache-v1';
+                const urlsToCache = [
+                    '/',
+                    'https://cdn.tailwindcss.com',
+                    'https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;700&display=swap'
+                ];
+
+                self.addEventListener('install', event => {
+                    event.waitUntil(
+                        caches.open(CACHE_NAME)
+                            .then(cache => {
+                                console.log('Opened cache');
+                                return cache.addAll(urlsToCache);
+                            })
+                            .catch(err => {
+                                 console.error('Failed to cache', err);
+                            })
+                    );
+                });
+
+                self.addEventListener('fetch', event => {
+                    // We don't cache Firestore requests, let the SDK handle it.
+                    if (event.request.url.includes('firestore.googleapis.com')) {
+                        return;
+                    }
+                    
+                    event.respondWith(
+                        caches.match(event.request)
+                            .then(response => {
+                                // Cache hit - return response
+                                if (response) {
+                                    return response;
+                                }
+                                return fetch(event.request);
+                            }
+                        )
+                    );
+                });
+
+                 self.addEventListener('activate', event => {
+                    const cacheWhitelist = [CACHE_NAME];
+                    event.waitUntil(
+                        caches.keys().then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => {
+                                    if (cacheWhitelist.indexOf(cacheName) === -1) {
+                                        return caches.delete(cacheName);
+                                    }
+                                })
+                            );
+                        })
+                    );
+                });
+            `;
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register(swUrl)
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('ServiceWorker registration failed: ', error);
+                    });
+            });
+        } else if (window.location.protocol === 'file:') {
+             // Show a modal explaining the need for a server
+            ui.loadingOverlay.style.display = 'none';
+            ui.serverModal.classList.add('active');
+        }
+    </script>
+</body>
+</html>
